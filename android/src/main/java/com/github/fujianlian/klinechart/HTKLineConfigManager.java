@@ -127,6 +127,13 @@ public class HTKLineConfigManager {
 
     public float closePriceRightLightLottieScale = 1;
 
+    public float referenceLineWidth = 1;
+
+    public float referenceLineDashWidth = 4;
+
+    public float referenceLineDashSpace = 4;
+
+    public List<HTKLineReferenceLine> referenceLineList = new ArrayList<>();
 
     public int[] panelGradientColorList = { Color.BLUE, Color.BLUE };
 
@@ -425,7 +432,30 @@ public class HTKLineConfigManager {
         this.minuteGradientColorList = parseColorList(configList.get("minuteGradientColorList"));
         this.minuteGradientLocationList = parseLocationList(configList.get("minuteGradientLocationList"));
 
-        
+        List referenceLineList = (List) configList.get("referenceLineList");
+        if (referenceLineList != null) {
+            this.referenceLineList = HTKLineReferenceLine.packModelArray(referenceLineList);
+        } else {
+            this.referenceLineList = new ArrayList<>();
+        }
+        Number referenceLineWidth = (Number) configList.get("referenceLineWidth");
+        if (referenceLineWidth != null) {
+            this.referenceLineWidth = referenceLineWidth.floatValue();
+        }
+        Number referenceLineDashWidth = (Number) configList.get("referenceLineDashWidth");
+        if (referenceLineDashWidth != null) {
+            this.referenceLineDashWidth = referenceLineDashWidth.floatValue();
+        }
+        Number referenceLineDashSpace = (Number) configList.get("referenceLineDashSpace");
+        if (referenceLineDashSpace != null) {
+            this.referenceLineDashSpace = referenceLineDashSpace.floatValue();
+        }
+
+        List priceLines = (List) optionList.get("priceLines");
+        if (priceLines != null) {
+            this.referenceLineList = HTKLineReferenceLine.packModelArray(priceLines);
+        }
+
     }
 
 }

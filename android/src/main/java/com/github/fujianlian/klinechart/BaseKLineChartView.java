@@ -113,6 +113,14 @@ public abstract class BaseKLineChartView extends ScrollAndScaleView implements D
 
     private Paint mClosePriceRightTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    private Paint mReferenceLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private Paint mReferenceLabelTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private Paint mReferenceLabelBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private Paint mReferenceLabelBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     private LottieDrawable lottieDrawable = new LottieDrawable();
 
     private String lastLoadLottieSource = "";
@@ -194,6 +202,10 @@ public abstract class BaseKLineChartView extends ScrollAndScaleView implements D
 
         mClosePriceTrianglePaint.setStyle(Paint.Style.FILL);
 
+        mReferenceLinePaint.setStyle(Paint.Style.STROKE);
+        mReferenceLinePaint.setAntiAlias(true);
+        mReferenceLabelBackgroundPaint.setStyle(Paint.Style.FILL);
+        mReferenceLabelBorderPaint.setStyle(Paint.Style.STROKE);
     }
 
     @Override
@@ -271,7 +283,9 @@ public abstract class BaseKLineChartView extends ScrollAndScaleView implements D
         canvas.scale(1, 1);
         drawGird(canvas);
         if (mItemCount > 0) {
+            drawReferenceLines(canvas);
             drawK(canvas);
+            drawReferenceLineLabels(canvas);
             drawText(canvas);
             drawMaxAndMin(canvas);
             drawValue(canvas, isLongPress ? mSelectedIndex : mStopIndex);
@@ -467,6 +481,126 @@ public abstract class BaseKLineChartView extends ScrollAndScaleView implements D
 
         }
 
+    }
+
+    private void drawReferenceLines(Canvas canvas) {
+        List<HTKLineReferenceLine> referenceLineList = configManager.referenceLineList;
+        if (referenceLineList == null || referenceLineList.isEmpty()) {
+            return;
+        }
+        for (HTKLineReferenceLine referenceLine : referenceLineList) {
+            if (referenceLine == null) {
+                continue;
+            }
+            if (referenceLine.visible != null && !referenceLine.visible) {
+                continue;
+            }
+            float y = yFromValue(referenceLine.value);
+            if (y < mMainRect.top || y > mMainRect.bottom) {
+                continue;
+            }
+            int color = referenceLine.color != null ? referenceLine.color : configManager.textColor;
+            float strokeWidth = referenceLine.width != null ? referenceLine.width : configManager.referenceLineWidth;
+            mReferenceLinePaint.setStrokeWidth(strokeWidth);
+            if (referenceLine.dash != null && referenceLine.dash.length >= 2) {
+                mReferenceLinePaint.setPathEffect(new DashPathEffect(referenceLine.dash, 0));
+            } else if (configManager.referenceLineDashWidth > 0 && configManager.referenceLineDashSpace > 0) {
+                mReferenceLinePaint.setPathEffect(new DashPathEffect(new float[]{
+                        configManager.referenceLineDashWidth,
+                        configManager.referenceLineDashSpace
+                }, 0));
+            } else {
+                mReferenceLinePaint.setPathEffect(null);
+            }
+            mReferenceLinePaint.setColor(color);
+            canvas.drawLine(0, y, mWidth, y, mReferenceLinePaint);
+        }
+    }
+
+    private void drawReferenceLineLabels(Canvas canvas) {
+        List<HTKLineReferenceLine> referenceLineList = configManager.referenceLineList;
+        if (referenceLineList == null || referenceLineList.isEmpty()) {
+            return;
+        }
+        ArrayList<RectF> placed = new ArrayList<>();
+        for (HTKLineReferenceLine referenceLine : referenceLineList) {
+            if (referenceLine == null) {
+                continue;
+            }
+            if (referenceLine.visible != null && !referenceLine.visible) {
+                continue;
+            }
+            if (referenceLine.label == null || referenceLine.label.length() == 0) {
+                continue;
+            }
+            float y = yFromValue(referenceLine.value);
+            if (y < mMainRect.top || y > mMainRect.bottom) {
+                continue;
+            }
+            int color = referenceLine.color != null ? referenceLine.color : configManager.textColor;
+            drawReferenceLineLabel(canvas, referenceLine, y, color, placed);
+        }
+    }
+
+    private void drawReferenceLineLabel(Canvas canvas, HTKLineReferenceLine referenceLine, float y, int lineColor, ArrayList<RectF> placed) {
+        if (referenceLine.label == null || referenceLine.label.length() == 0) {
+            return;
+        }
+        String labelText = referenceLine.label + " " + formatValue(referenceLine.value);
+        float paddingX = ViewUtil.Dp2Px(getContext(), 6);
+        float paddingY = ViewUtil.Dp2Px(getContext(), 3);
+        float radius = ViewUtil.Dp2Px(getContext(), 6);
+
+        mReferenceLabelTextPaint.setTextSize(mTextPaint.getTextSize());
+        int labelColor = referenceLine.labelColor != null
+                ? referenceLine.labelColor
+                : (referenceLine.color != null ? referenceLine.color : configManager.textColor);
+        mReferenceLabelTextPaint.setColor(labelColor);
+
+        float textWidth = mReferenceLabelTextPaint.measureText(labelText);
+        Paint.FontMetrics fm = mReferenceLabelTextPaint.getFontMetrics();
+        float textHeight = fm.descent - fm.ascent;
+
+        float rectWidth = textWidth + paddingX * 2;
+        float rectHeight = textHeight + paddingY * 2;
+        float rectTop = y - rectHeight / 2f;
+        rectTop = Math.max(mMainRect.top, Math.min(mMainRect.bottom - rectHeight, rectTop));
+        float rectLeft;
+        String position = referenceLine.labelPosition != null ? referenceLine.labelPosition : HTKLineReferenceLine.LABEL_POSITION_RIGHT;
+        if (HTKLineReferenceLine.LABEL_POSITION_LEFT.equalsIgnoreCase(position)) {
+            rectLeft = ViewUtil.Dp2Px(getContext(), 4);
+        } else {
+            int lastIndex = Math.max(0, Math.min(mStopIndex, mItemCount - 1));
+            float lastX = scrollXtoViewX(getItemMiddleScrollX(lastIndex)) + ViewUtil.Dp2Px(getContext(), 6);
+            float maxLeft = mWidth - rectWidth - ViewUtil.Dp2Px(getContext(), 4);
+            rectLeft = Math.min(maxLeft, Math.max(ViewUtil.Dp2Px(getContext(), 4), lastX));
+        }
+        RectF rect = new RectF(rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight);
+        float gap = ViewUtil.Dp2Px(getContext(), 2);
+        for (int i = 0; i < placed.size(); i++) {
+            RectF placedRect = placed.get(i);
+            if (RectF.intersects(rect, placedRect)) {
+                rect.top = placedRect.bottom + gap;
+                rect.bottom = rect.top + rectHeight;
+            }
+        }
+        if (rect.bottom > mMainRect.bottom) {
+            rect.bottom = mMainRect.bottom;
+            rect.top = rect.bottom - rectHeight;
+        }
+        if (rect.top < mMainRect.top) {
+            rect.top = mMainRect.top;
+            rect.bottom = rect.top + rectHeight;
+        }
+        placed.add(new RectF(rect));
+        mReferenceLabelBackgroundPaint.setColor(configManager.panelBackgroundColor);
+        canvas.drawRoundRect(rect, radius, radius, mReferenceLabelBackgroundPaint);
+        mReferenceLabelBorderPaint.setColor(configManager.panelBorderColor);
+        mReferenceLabelBorderPaint.setStrokeWidth(ViewUtil.Dp2Px(getContext(), 0.6f));
+        canvas.drawRoundRect(rect, radius, radius, mReferenceLabelBorderPaint);
+        float textX = rect.left + paddingX;
+        float textY = rect.top + paddingY - fm.ascent;
+        canvas.drawText(labelText, textX, textY, mReferenceLabelTextPaint);
     }
 
     /**
@@ -1406,6 +1540,12 @@ public abstract class BaseKLineChartView extends ScrollAndScaleView implements D
         mClosePriceTrianglePaint.setTypeface(typeface);
 
         mClosePriceRightTextPaint.setTypeface(typeface);
+
+        mReferenceLabelTextPaint.setTypeface(typeface);
+
+        mReferenceLabelBackgroundPaint.setTypeface(typeface);
+
+        mReferenceLabelBorderPaint.setTypeface(typeface);
     }
 
     /**

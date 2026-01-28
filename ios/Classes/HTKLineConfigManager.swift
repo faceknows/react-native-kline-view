@@ -229,7 +229,14 @@ class HTKLineConfigManager: NSObject {
     var closePriceRightLightLottieScale: CGFloat = 0.4
 
     var closePriceRightLightLottieSource = ""
-    
+
+    var referenceLineWidth: CGFloat = 1
+
+    var referenceLineDashWidth: CGFloat = 4
+
+    var referenceLineDashSpace: CGFloat = 4
+
+    var referenceLineList = [HTKLineReferenceLine]()
     
     // shot draw
     var shotBackgroundColor = UIColor.orange
@@ -440,6 +447,15 @@ class HTKLineConfigManager: NSObject {
         closePriceRightLightLottieFloder = configList["closePriceRightLightLottieFloder"] as? String ?? ""
         closePriceRightLightLottieScale = configList["closePriceRightLightLottieScale"] as? CGFloat ?? 0
         closePriceRightLightLottieSource = configList["closePriceRightLightLottieSource"] as? String ?? ""
+
+        referenceLineList = HTKLineReferenceLine.packModelArray(configList["referenceLineList"] as? [[String: Any]] ?? [])
+        referenceLineWidth = configList["referenceLineWidth"] as? CGFloat ?? referenceLineWidth
+        referenceLineDashWidth = configList["referenceLineDashWidth"] as? CGFloat ?? referenceLineDashWidth
+        referenceLineDashSpace = configList["referenceLineDashSpace"] as? CGFloat ?? referenceLineDashSpace
+
+        if let priceLines = optionList["priceLines"] as? [[String: Any]] {
+            referenceLineList = HTKLineReferenceLine.packModelArray(priceLines)
+        }
     }
 
 }

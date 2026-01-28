@@ -30,6 +30,9 @@ class HTKLineContainerView: UIView {
                         return
                     }
                     self?.configManager.reloadOptionList(optionListDict)
+                    if let priceLines = self?.priceLines {
+                        self?.configManager.referenceLineList = HTKLineReferenceLine.packModelArray(priceLines)
+                    }
                     DispatchQueue.main.async {
                         guard let self = self else { return }
                         self.reloadConfigManager(self.configManager)
@@ -37,6 +40,19 @@ class HTKLineContainerView: UIView {
                 } catch {
                     print("Error parsing optionList: \(error)")
                 }
+            }
+        }
+    }
+
+    @objc var priceLines: [[String: Any]]? {
+        didSet {
+            if let priceLines = priceLines {
+                configManager.referenceLineList = HTKLineReferenceLine.packModelArray(priceLines)
+            } else {
+                configManager.referenceLineList = []
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.klineView.setNeedsDisplay()
             }
         }
     }
@@ -210,4 +226,3 @@ class HTKLineContainerView: UIView {
     }
     
 }
-
