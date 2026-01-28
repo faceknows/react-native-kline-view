@@ -161,11 +161,9 @@ class HTKLineView: UIScrollView {
         }
 
         calculateBaseHeight()
-        drawReferenceLines(context)
         contextTranslate(context, CGFloat(visibleRange.lowerBound) * configManager.itemWidth, { context in
             drawCandle(context)
         })
-        drawReferenceLineLabels(context)
 
         contextTranslate(context, contentOffset.x, { context in
 //            context.setFillColor(UIColor.red.withAlphaComponent(0.1).cgColor)
@@ -177,6 +175,8 @@ class HTKLineView: UIScrollView {
 
 
             drawHighLow(context)
+            drawCustomLabels(context)
+            drawPriceLines(context)
             drawTime(context)
             drawClosePrice(context)
             drawSelectedLine(context)
@@ -352,6 +352,101 @@ class HTKLineView: UIScrollView {
 
     }
 
+    func drawCustomLabels(_ context: CGContext) {
+        let labelList = configManager.customLabelList
+        if labelList.isEmpty {
+            return
+        }
+
+        var labelMap = [String: [HTKLineCustomLabel]]()
+        for label in labelList {
+            labelMap[label.time, default: []].append(label)
+        }
+
+        let font = configManager.createFont(configManager.candleTextFontSize)
+        let textHeight = mainDraw.textHeight(font: font)
+        let lineString = "--"
+        let halfWidth = allWidth / 2
+
+        for (i, model) in visibleModelArray.enumerated() {
+            guard let labels = labelMap[model.dateString], !labels.isEmpty else {
+                continue
+            }
+
+            let offset = CGFloat(i + visibleRange.lowerBound) * configManager.itemWidth - contentOffset.x
+            let baseX = offset + configManager.itemWidth / 2
+            let leftAlign = offset < halfWidth
+
+            for (labelIndex, label) in labels.enumerated() {
+                var title = label.label
+                var x = baseX
+                if leftAlign {
+                    title = lineString + title
+                } else {
+                    title = title + lineString
+                    x -= mainDraw.textWidth(title: title, font: font)
+                }
+
+                var y = yFromValue(model.high) - textHeight / 2 - 1 - CGFloat(labelIndex) * (textHeight + 2)
+                y = max(mainBaseY, y)
+                mainDraw.drawText(title: title, point: CGPoint.init(x: x, y: y), color: label.color, font: font, context: context, configManager: configManager)
+            }
+        }
+    }
+
+
+    func drawPriceLines(_ context: CGContext) {
+        let lineList = configManager.referenceLineList
+        if lineList.isEmpty {
+            return
+        }
+        let font = configManager.createFont(configManager.rightTextFontSize)
+        let textHeight = mainDraw.textHeight(font: font)
+        for line in lineList where line.visible {
+            let y = yFromValue(line.value)
+            if y < mainBaseY - textHeight || y > mainBaseY + mainHeight + textHeight {
+                continue
+            }
+            let color = line.color ?? configManager.candleTextColor
+            let width = line.width ?? configManager.lineWidth
+            let dashList = line.dash ?? []
+            context.saveGState()
+            context.setStrokeColor(color.cgColor)
+            context.setLineWidth(width)
+            if !dashList.isEmpty {
+                context.setLineDash(phase: 0, lengths: dashList)
+            } else {
+                context.setLineDash(phase: 0, lengths: [])
+            }
+            context.addLines(between: [CGPoint.init(x: 0, y: y), CGPoint.init(x: allWidth, y: y)])
+            context.strokePath()
+            context.restoreGState()
+
+            guard let label = line.label, !label.isEmpty else {
+                continue
+            }
+            let labelWidth = mainDraw.textWidth(title: label, font: font)
+            let baseX = allWidth
+            let x: CGFloat
+            if line.labelPosition == HTKLineReferenceLine.labelPositionLeft {
+                x = 4
+            } else {
+                x = baseX - labelWidth
+            }
+            let labelY = y - textHeight / 2
+            let labelColor = line.labelColor ?? configManager.textColor
+            mainDraw.drawText(
+                title: label,
+                point: CGPoint.init(x: x, y: labelY),
+                color: labelColor,
+                font: font,
+                context: context,
+                configManager: configManager
+            )
+        }
+    }
+
+
     func drawClosePrice(_ context: CGContext) {
         guard let lastModel = configManager.modelArray.last else {
             return
@@ -439,108 +534,6 @@ class HTKLineView: UIScrollView {
                 self.animationView.center = CGPoint.init(x: x + self.configManager.itemWidth / 2 + self.contentOffset.x, y: y)
             }
         }
-    }
-
-    func drawReferenceLines(_ context: CGContext) {
-        if (configManager.referenceLineList.isEmpty) {
-            return
-        }
-        context.saveGState()
-        for referenceLine in configManager.referenceLineList {
-            if !referenceLine.visible {
-                continue
-            }
-            let y = yFromValue(referenceLine.value)
-            if (y < mainBaseY || y > mainBaseY + mainHeight) {
-                continue
-            }
-            let color = referenceLine.color ?? configManager.textColor
-            let width = referenceLine.width ?? configManager.referenceLineWidth
-            context.setLineWidth(width)
-            if let dash = referenceLine.dash, dash.count >= 2 {
-                context.setLineDash(phase: 0, lengths: dash)
-            } else if configManager.referenceLineDashWidth > 0 && configManager.referenceLineDashSpace > 0 {
-                context.setLineDash(phase: 0, lengths: [configManager.referenceLineDashWidth, configManager.referenceLineDashSpace])
-            } else {
-                context.setLineDash(phase: 0, lengths: [])
-            }
-            context.setStrokeColor(color.cgColor)
-            context.addLines(between: [CGPoint.init(x: 0, y: y), CGPoint.init(x: allWidth, y: y)])
-            context.strokePath()
-        }
-        context.restoreGState()
-    }
-
-    func drawReferenceLineLabels(_ context: CGContext) {
-        if (configManager.referenceLineList.isEmpty) {
-            return
-        }
-        var placed = [CGRect]()
-        for referenceLine in configManager.referenceLineList {
-            if !referenceLine.visible {
-                continue
-            }
-            guard let label = referenceLine.label, !label.isEmpty else {
-                continue
-            }
-            let y = yFromValue(referenceLine.value)
-            if (y < mainBaseY || y > mainBaseY + mainHeight) {
-                continue
-            }
-            let lineColor = referenceLine.color ?? configManager.textColor
-            drawReferenceLineLabel(context, referenceLine, y, lineColor, &placed)
-        }
-    }
-
-    func drawReferenceLineLabel(_ context: CGContext, _ referenceLine: HTKLineReferenceLine, _ y: CGFloat, _ lineColor: UIColor, _ placed: inout [CGRect]) {
-        guard let label = referenceLine.label, label.count > 0 else {
-            return
-        }
-        let valueText = configManager.precision(referenceLine.value, configManager.price)
-        let title = "\(label) \(valueText)"
-        let font = configManager.createFont(configManager.rightTextFontSize)
-        let textWidth = mainDraw.textWidth(title: title, font: font)
-        let textHeight = mainDraw.textHeight(font: font)
-        let paddingX: CGFloat = 6
-        let paddingY: CGFloat = 3
-        let rectWidth = textWidth + paddingX * 2
-        let rectHeight = textHeight + paddingY * 2
-        let clampedY = max(mainBaseY, min(mainBaseY + mainHeight - rectHeight, y - rectHeight / 2))
-        let isLeft = referenceLine.labelPosition.lowercased() == HTKLineReferenceLine.labelPositionLeft
-        let rectX: CGFloat
-        if isLeft {
-            rectX = 4
-        } else {
-            let lastIndex = min(max(visibleRange.upperBound - 1, 0), configManager.modelArray.count - 1)
-            let lastX = CGFloat(lastIndex) * configManager.itemWidth + configManager.itemWidth / 2 - contentOffset.x + 6
-            rectX = min(allWidth - rectWidth - 4, max(4, lastX))
-        }
-        var rect = CGRect.init(x: rectX, y: clampedY, width: rectWidth, height: rectHeight)
-        let gap: CGFloat = 2
-        for placedRect in placed {
-            if rect.intersects(placedRect) {
-                rect.origin.y = placedRect.maxY + gap
-                rect.size.height = rectHeight
-            }
-        }
-        if rect.maxY > mainBaseY + mainHeight {
-            rect.origin.y = mainBaseY + mainHeight - rectHeight
-        }
-        if rect.minY < mainBaseY {
-            rect.origin.y = mainBaseY
-        }
-        placed.append(rect)
-
-        let backgroundPath = UIBezierPath.init(roundedRect: rect, cornerRadius: rectHeight / 2)
-        context.setFillColor(configManager.panelBackgroundColor.cgColor)
-        context.addPath(backgroundPath.cgPath)
-        context.fillPath()
-        context.setStrokeColor(configManager.panelBorderColor.cgColor)
-        context.addPath(backgroundPath.cgPath)
-        context.strokePath()
-
-        let labelColor = referenceLine.labelColor ?? referenceLine.color ?? lineColor
-        mainDraw.drawText(title: title, point: CGPoint.init(x: rect.minX + paddingX, y: rect.minY + paddingY), color: labelColor, font: font, context: context, configManager: configManager)
     }
 
     func drawSelectedLine(_ context: CGContext) {
